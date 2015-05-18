@@ -15,28 +15,22 @@ use Psr\Http\Message\RequestInterface;
 class BucketStyleMiddleware
 {
     private static $exclusions = ['GetBucketLocation' => true];
-    private $bucketEndpoint;
     private $nextHandler;
 
     /**
      * Create a middleware wrapper function.
      *
-     * @param bool $bucketEndpoint Set to true to send requests to a bucket
-     *                             specific endpoint and not inject a bucket
-     *                             in the request host or path.
-     *
      * @return callable
      */
-    public static function wrap($bucketEndpoint = false)
+    public static function wrap()
     {
-        return function (callable $handler) use ($bucketEndpoint) {
-            return new self($bucketEndpoint, $handler);
+        return function (callable $handler) {
+            return new self($handler);
         };
     }
 
-    public function __construct($bucketEndpoint, callable $nextHandler)
+    public function __construct(callable $nextHandler)
     {
-        $this->bucketEndpoint = $bucketEndpoint;
         $this->nextHandler = $nextHandler;
     }
 
@@ -69,18 +63,7 @@ class BucketStyleMiddleware
         $uri = $request->getUri();
         $path = $uri->getPath();
         $bucket = $command['Bucket'];
-
-        if ($this->bucketEndpoint) {
-            $path = $this->removeBucketFromPath($path, $bucket);
-        } elseif (S3Client::isBucketDnsCompatible($bucket)
-            && !($uri->getScheme() == 'https' && strpos($bucket, '.'))
-        ) {
-            // Switch to virtual if not a DNS compatible bucket name, or the
-            // scheme is https and there are no dots in the host header
-            // (avoids SSL issues).
-            $uri = $uri->withHost($bucket . '.' . $uri->getHost());
-            $path = $this->removeBucketFromPath($path, $bucket);
-        }
+        $path = $this->removeBucketFromPath($path, $bucket);
 
         // Modify the Key to make sure the key is encoded, but slashes are not.
         if ($command['Key']) {

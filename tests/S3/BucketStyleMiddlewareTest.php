@@ -8,70 +8,19 @@ use Psr\Http\Message\RequestInterface;
 /**
  * @covers Aws\S3\BucketStyleMiddleware
  */
-class BucketStyleTest extends \PHPUnit_Framework_TestCase
+class BucketStyleMiddlewareTest extends \PHPUnit_Framework_TestCase
 {
     use UsesServiceTrait;
 
-    public function testUsesPathStyleWhenHttpsContainsDots()
-    {
-        $s3 = $this->getTestClient('s3');
-        $this->addMockResults($s3, [[]]);
-        $command = $s3->getCommand('GetObject', [
-            'Bucket' => 'test.123',
-            'Key'    => 'Bar'
-        ]);
-        $command->getHandlerList()->appendSign(
-            Middleware::tap(function ($cmd, RequestInterface $req) {
-                $this->assertEquals('s3.amazonaws.com', $req->getUri()->getHost());
-                $this->assertEquals('/test.123/Bar', $req->getRequestTarget());
-            })
-        );
-        $s3->execute($command);
-    }
-
-    public function testUsesPathStyleWhenNotDnsCompatible()
-    {
-        $s3 = $this->getTestClient('s3');
-        $this->addMockResults($s3, [[]]);
-        $command = $s3->getCommand('GetObject', [
-            'Bucket' => '_baz_!',
-            'Key'    => 'Bar'
-        ]);
-        $command->getHandlerList()->appendSign(
-            Middleware::tap(function ($cmd, $req) {
-                $this->assertEquals('s3.amazonaws.com', $req->getUri()->getHost());
-                $this->assertEquals('/_baz_%21/Bar', $req->getRequestTarget());
-            })
-        );
-        $s3->execute($command);
-    }
-
-    public function testUsesPathStyleWhenForced()
-    {
-        $s3 = $this->getTestClient('s3', ['force_path_style' => true]);
-        $this->addMockResults($s3, [[]]);
-        $command = $s3->getCommand('GetObject', [
-            'Bucket' => 'foo',
-            'Key'    => 'Bar'
-        ]);
-        $command->getHandlerList()->appendSign(
-            Middleware::tap(function ($cmd, $req) {
-                $this->assertEquals('s3.amazonaws.com', $req->getUri()->getHost());
-                $this->assertEquals('/foo/Bar', $req->getRequestTarget());
-            })
-        );
-        $s3->execute($command);
-    }
-
-    public function testUsesVirtualHostedWhenPossible()
+    public function testUsesPathStyleByDefault()
     {
         $s3 = $this->getTestClient('s3');
         $this->addMockResults($s3, [[]]);
         $command = $s3->getCommand('GetObject', ['Bucket' => 'foo', 'Key' => 'Bar/Baz']);
         $command->getHandlerList()->appendSign(
             Middleware::tap(function ($cmd, $req) {
-                $this->assertEquals('foo.s3.amazonaws.com', $req->getUri()->getHost());
-                $this->assertEquals('/Bar/Baz', $req->getRequestTarget());
+                $this->assertEquals('s3.amazonaws.com', $req->getUri()->getHost());
+                $this->assertEquals('/foo/Bar/Baz', $req->getRequestTarget());
             })
         );
         $s3->execute($command);
@@ -80,7 +29,7 @@ class BucketStyleTest extends \PHPUnit_Framework_TestCase
     public function testIgnoresExcludedCommands()
     {
         $s3 = $this->getTestClient('s3');
-        $this->addMockResults($s3, [[]]);
+        $this->addMockResults($s3, [['bucket_endpoint' => true]]);
         $command = $s3->getCommand('GetBucketLocation', ['Bucket' => 'foo']);
         $command->getHandlerList()->appendSign(
             Middleware::tap(function ($cmd, $req) {
